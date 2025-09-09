@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { TablePayload } from "@/types";
+import {truncate} from "node:fs";
 
 // ------------------------------------
 // Configurable Constants / Utilities
@@ -52,7 +53,7 @@ interface ExpandedRowContentProps<TData> {
 
 function ExpandedRowContent<TData>({ row }: ExpandedRowContentProps<TData>) {
     return (
-        <div className="p-4 bg-muted/40 rounded-md animate-in fade-in">
+        <div className="p-4 bg-muted/40 rounded-md animate-in fade-in w-[90vw] max-w-6xl ">
             <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Details</h4>
             <div className="grid gap-3 md:grid-cols-2">
                 {row.getVisibleCells().map((cell) => {
@@ -268,11 +269,12 @@ function DataTableWidget<TData>({
 
             <div
                 className={
-                    "overflow-hidden rounded-lg border bg-white/80 backdrop-blur-sm shadow-sm " +
+                    "overflow-x-auto rounded-lg border bg-white/80 backdrop-blur-sm shadow-sm " +
                     tableContainerClassName
                 }
             >
-                <Table className="w-full table-fixed">
+
+                <Table className="table-fixed">
                     <TableHeader className="bg-muted/40">
                         {table.getHeaderGroups().map((hg) => (
                             <TableRow key={hg.id}>
@@ -285,6 +287,7 @@ function DataTableWidget<TData>({
                                         <TableHead
                                             key={header.id}
                                             className="whitespace-nowrap"
+                                            style={{ width: header.getSize() }}
                                         >
                                             {canSort ? (
                                                 <Button
@@ -339,7 +342,7 @@ function DataTableWidget<TData>({
                                                 {row.getVisibleCells().map((cell) => (
                                                     <TableCell
                                                         key={cell.id}
-                                                        className="max-w-[280px] truncate align-middle"
+                                                        className="max-w-[280px]  align-middle"
                                                         title={String(cell.getValue() ?? "")}
                                                     >
                                                         {flexRender(
@@ -417,6 +420,8 @@ export function TableWidget({
                 accessorKey: header,
                 header,
                 enableSorting: true,
+                minSize:130,
+                size:160,
                 cell: ({ getValue }) => {
                     const raw = getValue();
                     const text = raw == null ? "" : String(raw);
@@ -424,24 +429,27 @@ export function TableWidget({
                         return <span className="block truncate">{text}</span>;
                     }
                     return (
-                        <ReactMarkdown
-                            remarkPlugins={remarkPlugins}
-                            rehypePlugins={rehypePlugins}
-                            // Add components to simplify tags
-                            components={{
-                                p: (props) => <p {...props} className="m-0 leading-snug" />,
-                                a: (props) => (
-                                    <a
-                                        {...props}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-600 hover:underline"
-                                    />
-                                ),
-                            }}
-                        >
-                            {text}
-                        </ReactMarkdown>
+                        <div className="truncate">
+                            <ReactMarkdown
+                                remarkPlugins={remarkPlugins}
+                                rehypePlugins={rehypePlugins}
+                                // Add components to simplify tags
+                                components={{
+                                    p: (props) => <p {...props} className="m-0 leading-snug" />,
+                                    a: (props) => (
+                                        <a
+                                            {...props}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 hover:underline"
+                                        />
+                                    ),
+                                }}
+                            >
+
+                                {text}
+                            </ReactMarkdown>
+                        </div>
                     );
                 },
             };

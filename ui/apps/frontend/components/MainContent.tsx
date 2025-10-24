@@ -1,11 +1,12 @@
 "use client";
 
-import { ChatThread, Widget, TablePayload, MarkdownPayload } from "@repo/types";
+import { ChatThread, Widget, TablePayload, MarkdownPayload, PieChartPayload} from "@repo/types";
 import { MarkdownWidget } from "@repo/ui/components";
 import { TableWidget } from "@repo/ui/components";
 import { useMemo, useState } from "react";
 import { CopilotKit } from "@copilotkit/react-core";
 import { ThreadContext, useThreadManager } from "@/contexts/ThreadProvider";
+import { PieChartWidget } from "@repo/ui/components";
 
 export function MainContent({ widgets }: { widgets: Widget[] }) {
   return (
@@ -35,6 +36,13 @@ export function MainContent({ widgets }: { widgets: Widget[] }) {
                 <MarkdownWidget
                   key={widget.id}
                   data={widget.payload as MarkdownPayload}
+                />
+              );
+            case "pie":
+              return (
+                <PieChartWidget
+                  key={widget.id}
+                  data={widget.payload as PieChartPayload}
                 />
               );
 

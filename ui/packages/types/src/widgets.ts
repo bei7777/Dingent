@@ -29,8 +29,22 @@ export interface TablePayload {
   [k: string]: unknown;
 }
 
-export type WidgetPayload = MarkdownPayload | TablePayload;
 
+export interface PieChartDatum {
+  label: string;
+  value: number;
+  color?: string;
+}
+
+export interface PieChartPayload {
+  type: "pie";
+  data: PieChartDatum[];
+  title?: string;
+  totalLabel?: string;
+  [k: string]: unknown;
+}
+
+export type WidgetPayload = MarkdownPayload | TablePayload | PieChartPayload;
 export interface Widget {
   id: string; // resourceId
   type: string; // payload type, fallback 'markdown'

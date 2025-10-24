@@ -85,3 +85,4 @@ export * from "./ui/textarea";
 export * from "./ui/tooltip";
 export * from "./widgets/DataTableWidget";
 export * from "./widgets/MarkdownWidget";
+export * from "./widgets/PieChartWidget"

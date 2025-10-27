@@ -30,7 +30,8 @@ import {
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Skeleton } from "../ui/skeleton";
-import type { TablePayload } from "@repo/types";
+import type { PieChartPayload, TablePayload } from "@repo/types";
+import {PieChartWidget} from "./PieChartWidget"
 
 const DEFAULT_PAGE_SIZE = 8;
 const DEFAULT_COLUMN_WIDTH = 140;
@@ -104,6 +105,147 @@ interface DataTableWidgetProps<TData> {
   columnWidths?: Record<string, number>;
   rowHeight?: number;
 }
+
+function normalizeRows(
+  rows: unknown,
+  columns: string[],
+): Record<string, unknown>[] {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows
+    .map((row) => {
+      if (Array.isArray(row)) {
+        const normalized: Record<string, unknown> = {};
+        columns.forEach((column, index) => {
+          normalized[column] = row[index];
+        });
+        return normalized;
+      }
+
+      if (row && typeof row === "object") {
+        return row as Record<string, unknown>;
+      }
+
+      return null;
+    })
+    .filter((entry): entry is Record<string, unknown> => entry !== null);
+}
+
+interface PieChartDerivationResult {
+  payload: PieChartPayload | null;
+  reason?: string;
+}
+
+function derivePieChartPayload(
+  table: TablePayload,
+  rows: Record<string, unknown>[],
+): PieChartDerivationResult {
+  if (!rows.length || table.columns.length < 2) {
+    return {
+      payload: null,
+      reason: "需要至少一列分类信息和一列数值列才能生成饼图",
+    };
+  }
+
+  const candidateLabelColumns = table.columns;
+  let labelColumn = candidateLabelColumns[0];
+
+  for (const column of candidateLabelColumns) {
+    const isMostlyText = rows.some((row) => {
+      const value = row[column];
+      return typeof value === "string" && value.trim().length > 0;
+    });
+    if (isMostlyText) {
+      labelColumn = column;
+      break;
+    }
+  }
+
+  let numericColumn: string | undefined;
+  for (const column of table.columns) {
+    let hasPositive = false;
+    let isNumeric = true;
+
+    for (const row of rows) {
+      const rawValue = row[column];
+      if (rawValue == null || rawValue === "") {
+        continue;
+      }
+
+      const numericValue =
+        typeof rawValue === "number" ? rawValue : Number(rawValue);
+      if (!Number.isFinite(numericValue)) {
+        isNumeric = false;
+        break;
+      }
+
+      if (numericValue > 0) {
+        hasPositive = true;
+      }
+    }
+
+    if (isNumeric && hasPositive) {
+      numericColumn = column;
+      break;
+    }
+  }
+
+  if (!numericColumn || numericColumn === labelColumn) {
+    return {
+      payload: null,
+      reason: "未检测到可用的数值列，无法自动生成饼图",
+    };
+  }
+
+  const slicesMap = new Map<string, number>();
+  for (const row of rows) {
+    const labelValue = row[labelColumn];
+    const numericValue = row[numericColumn];
+    const value =
+      typeof numericValue === "number"
+        ? numericValue
+        : Number(numericValue);
+
+    if (!Number.isFinite(value) || value <= 0) {
+      continue;
+    }
+
+    const label =
+      labelValue == null || String(labelValue).trim() === ""
+        ? "未命名"
+        : String(labelValue);
+    slicesMap.set(label, (slicesMap.get(label) ?? 0) + value);
+  }
+
+  const slices = Array.from(slicesMap.entries()).map(([label, value]) => ({
+    label,
+    value,
+  }));
+
+  if (!slices.length) {
+    return {
+      payload: null,
+      reason: "数值列中没有正数，无法绘制饼图",
+    };
+  }
+
+  const breakdownTitle = table.title
+    ? `${table.title} - ${numericColumn} 分布`
+    : undefined;
+
+  return {
+    payload: {
+      type: "pie",
+      title: breakdownTitle,
+      description: `按 ${labelColumn} 分类的 ${numericColumn} 占比`,
+      totalLabel: numericColumn,
+      slices,
+    },
+  };
+}
+
 
 function DataTablePagination<TData>({
   table,
@@ -476,6 +618,7 @@ export function TableWidget({
   const isDataValid =
     data && Array.isArray(data.columns) && Array.isArray(data.rows);
   const title = data?.title || "";
+  const normalizedTitle = title.trim() ? title : undefined;
 
   const columns: ColumnDef<Record<string, unknown>>[] = useMemo(() => {
     if (!isDataValid) return [];
@@ -547,29 +690,67 @@ export function TableWidget({
   ]);
 
   const tableData = useMemo(
-    () => (isDataValid ? (data.rows as Record<string, unknown>[]) : []),
+    () => (isDataValid ? normalizeRows(data.rows, data.columns) : []),
     [data, isDataValid],
   );
 
+  const pieChartDerivation = useMemo(
+    () => (isDataValid ? derivePieChartPayload(data, tableData) : { payload: null }),
+    [data, isDataValid, tableData],
+  );
+
+  const pieChartData = pieChartDerivation.payload;
+  const pieChartReason = pieChartDerivation.reason;
+
   const isLoading = !isDataValid;
+  const [showPie, setShowPie] = useState(false);
+
+  React.useEffect(() => {
+    if (!pieChartData) {
+      setShowPie(false);
+    }
+  }, [pieChartData]);
+
+
 
   return (
-    <WidgetCard>
-      <DataTableWidget
-        columns={columns}
-        data={tableData}
-        isLoading={isLoading}
-        title={title}
-        filterColumnId={filterColumnId}
-        pageSize={pageSize}
-        enableExpand={enableExpand}
-        enableZebra={enableZebra}
-        tableContainerClassName={tableContainerClassName}
-        enableHorizontalScroll={enableHorizontalScroll}
-        columnWidth={columnWidth}
-        columnWidths={columnWidths}
-        rowHeight={rowHeight}
-      />
+ <WidgetCard title={normalizedTitle}>
+      <div className="flex flex-col gap-6">
+        {pieChartData ? (
+          <div className="flex items-center justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPie((prev) => !prev)}
+            >
+              {showPie ? "隐藏饼图" : "显示饼图"}
+            </Button>
+          </div>
+        ) : null}
+        {!pieChartData && pieChartReason ? (
+          <div className="text-xs text-muted-foreground">{pieChartReason}</div>
+        ) : null}
+        <DataTableWidget
+          columns={columns}
+          data={tableData}
+          isLoading={isLoading}
+          title={normalizedTitle}
+          filterColumnId={filterColumnId}
+          pageSize={pageSize}
+          enableExpand={enableExpand}
+          enableZebra={enableZebra}
+          tableContainerClassName={tableContainerClassName}
+          enableHorizontalScroll={enableHorizontalScroll}
+          columnWidth={columnWidth}
+          columnWidths={columnWidths}
+          rowHeight={rowHeight}
+        />
+        {showPie && pieChartData ? (
+          <div className="border-t border-border/60 pt-6">
+            <PieChartWidget data={pieChartData} showCard={false} />
+          </div>
+        ) : null}
+      </div>
     </WidgetCard>
   );
 }

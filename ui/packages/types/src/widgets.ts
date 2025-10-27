@@ -30,7 +30,7 @@ export interface TablePayload {
 }
 
 
-export interface PieChartDatum {
+export interface PieChartSlice {
   label: string;
   value: number;
   color?: string;
@@ -38,13 +38,25 @@ export interface PieChartDatum {
 
 export interface PieChartPayload {
   type: "pie";
-  data: PieChartDatum[];
+  /**
+   * Retained for backwards compatibility with existing widgets that expect
+   * `data` as the primary series field.
+   */
+  data: PieChartSlice[];
+  /**
+   * Preferred alias used by the new pie chart widget; mirrors `data`.
+   */
+  slices?: PieChartSlice[];
   title?: string;
+  description?: string;
   totalLabel?: string;
   [k: string]: unknown;
 }
 
-export type WidgetPayload = MarkdownPayload | TablePayload | PieChartPayload;
+export type WidgetPayload =
+  | MarkdownPayload
+  | TablePayload
+  | PieChartPayload;
 export interface Widget {
   id: string; // resourceId
   type: string; // payload type, fallback 'markdown'

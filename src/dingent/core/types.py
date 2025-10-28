@@ -29,8 +29,16 @@ class TablePayload(ToolDisplayPayloadBase):
     title: str = ""
 
 
+class PieChartDisplayPayload(ToolDisplayPayloadBase):
+    type: Literal["pie_chart"] = "pie_chart"
+    data: list[dict]
+    title: str = ""
+    description: str | None = None
+    total_label: str | None = None
+
+
 # 未来可扩展: ImagePayload / CodePayload / ChartPayload 等
-ToolDisplayPayload = MarkdownPayload | TablePayload
+ToolDisplayPayload = MarkdownPayload | TablePayload | PieChartDisplayPayload
 
 
 class ToolResult(BaseModel):
@@ -84,6 +92,8 @@ class ToolResult(BaseModel):
                         display_payloads.append(MarkdownPayload(**p))
                     elif p_type == "table":
                         display_payloads.append(TablePayload(**p))
+                    elif p_type == "pie_chart":
+                        display_payloads.append(PieChartDisplayPayload(**p))
                     else:
                         # 未知类型先忽略或记录为 markdown
                         display_payloads.append(MarkdownPayload(content=f"[Unsupported payload type {p_type}] {p}"))

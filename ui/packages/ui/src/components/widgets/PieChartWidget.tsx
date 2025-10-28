@@ -2,7 +2,7 @@
 
 import { PieChartPayload } from "@repo/types";
 import { WidgetCard } from "./WidgetCard";
-import { useId, useMemo } from "react";
+import { useEffect, useId, useMemo } from "react";
 
 type PieChartWidgetProps = {
   data: PieChartPayload;
@@ -48,7 +48,13 @@ export function PieChartWidget({
   const { title, description, totalLabel } = data;
 
   const segments = useMemo<Segment[]>(() => {
-    const slices = Array.isArray(data.slices) ? data.slices : [];
+    const slicesSource =
+      Array.isArray(data.slices) && data.slices.length > 0
+        ? data.slices
+        : Array.isArray(data.data)
+          ? data.data
+          : [];
+    const slices = slicesSource as PieChartPayload["data"];
     const total = slices
       .map((slice) => Number(slice?.value ?? 0))
       .filter((value) => Number.isFinite(value) && value > 0)
@@ -80,19 +86,31 @@ export function PieChartWidget({
           "Z",
         ].join(" ");
 
+        const fallbackColor =
+          FALLBACK_COLORS[index % FALLBACK_COLORS.length] ??
+          FALLBACK_COLORS[0] ??
+          "#6366F1";
+
         return {
           label: String(slice?.label ?? `Slice ${index + 1}`),
           value: rawValue,
           percent: (rawValue / total) * 100,
           path,
-          color: slice?.color ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length],
+          color: slice.color ?? fallbackColor,
         } satisfies Segment;
       })
       .filter((segment): segment is Segment => Boolean(segment));
-  }, [data.slices]);
+  }, [data.data, data.slices]);
 
   const totalValue = useMemo(() => {
     return segments.reduce((sum, segment) => sum + segment.value, 0);
+  }, [segments]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.debug("PieChartWidget segments", segments);
+    }
   }, [segments]);
 
   const content = (
@@ -123,9 +141,7 @@ export function PieChartWidget({
                 stroke="white"
                 strokeWidth={0.01}
               >
-                <title>
-                  {segment.label}: {segment.value} ({segment.percent.toFixed(1)}%)
-                </title>
+                <title>{`${segment.label}: ${segment.value} (${segment.percent.toFixed(1)}%)`}</title>
               </path>
             ))}
           </svg>

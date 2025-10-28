@@ -14,6 +14,9 @@ export function MainContent({ widgets }: { widgets: Widget[] }) {
       className="h-screen w-full flex flex-col items-center overflow-y-auto pt-8 pb-8 space-y-6"
       style={{ zIndex: 1 }}
     >
+        <div className="px-6 py-3 bg-yellow-100 text-yellow-800 font-semibold rounded-lg shadow">
+            🚀 Dingent UI Local Build — {new Date().toLocaleString()}
+        </div>
       {widgets.length === 0 ? (
         <div className="flex-grow flex justify-center items-center text-gray-500">
           <p className="text-xl p-6 bg-white/60 rounded-lg shadow-md">

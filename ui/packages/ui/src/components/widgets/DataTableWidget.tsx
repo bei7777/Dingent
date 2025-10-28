@@ -35,6 +35,27 @@ import {PieChartWidget} from "./PieChartWidget"
 
 const DEFAULT_PAGE_SIZE = 8;
 const DEFAULT_COLUMN_WIDTH = 140;
+const MAX_PIE_LABELS = 12;
+const MIN_PIE_LABELS = 2;
+
+function toNumericValue(raw: unknown): number | null {
+  if (raw == null || raw === "") {
+    return null;
+  }
+
+  if (typeof raw === "number") {
+    return Number.isFinite(raw) ? raw : null;
+  }
+
+  if (typeof raw === "string") {
+    const cleaned = raw.trim().replace(/,/g, "");
+    if (!cleaned) return null;
+    const numericValue = Number(cleaned);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  }
+
+  return null;
+}
 
 function SortIndicator({ sorted }: { sorted: false | "asc" | "desc" }) {
   if (!sorted)
@@ -142,17 +163,104 @@ function derivePieChartPayload(
   table: TablePayload,
   rows: Record<string, unknown>[],
 ): PieChartDerivationResult {
-  if (!rows.length || table.columns.length < 2) {
+  const normalizedColumns = table.columns.filter(
+    (column): column is string =>
+      typeof column === "string" && column.trim().length > 0,
+  );
+
+  if (!rows.length || normalizedColumns.length < 2) {
     return {
       payload: null,
       reason: "需要至少一列分类信息和一列数值列才能生成饼图",
     };
   }
 
-  const candidateLabelColumns = table.columns;
-  let labelColumn = candidateLabelColumns[0];
+  const labelStats = normalizedColumns.map((column) => {
+    let nonEmptyCount = 0;
+    let nonNumericCount = 0;
+    const uniqueValues = new Set<string>();
+
+    for (const row of rows) {
+      const rawValue = row[column];
+      if (rawValue == null || rawValue === "") continue;
+      const strValue = String(rawValue).trim();
+      if (!strValue) continue;
+
+      nonEmptyCount += 1;
+      uniqueValues.add(strValue);
+      if (toNumericValue(rawValue) === null) {
+        nonNumericCount += 1;
+      }
+    }
+
+    const totalRows = rows.length || 1;
+    const coverage = nonEmptyCount / totalRows;
+    const uniqueCount = uniqueValues.size;
+    const uniqueRatio = nonEmptyCount ? uniqueCount / nonEmptyCount : 0;
+    const nonNumericRatio = nonEmptyCount ? nonNumericCount / nonEmptyCount : 0;
+    const score =
+      nonNumericRatio * 0.6 +
+      (1 - uniqueRatio) * 0.3 +
+      coverage * 0.1;
+
+    return {
+      column,
+      coverage,
+      nonEmptyCount,
+      nonNumericRatio,
+      score,
+      uniqueCount,
+      uniqueRatio,
+    };
+  });
+
+  const labelCandidate =
+    labelStats
+      .filter(
+        (stat) =>
+          stat.nonEmptyCount >= MIN_PIE_LABELS &&
+          stat.uniqueCount >= MIN_PIE_LABELS &&
+          stat.uniqueCount <= MAX_PIE_LABELS &&
+          stat.uniqueRatio <= 0.75 &&
+          stat.coverage >= 0.5,
+      )
+      .sort(
+        (a, b) =>
+          b.score - a.score ||
+          a.uniqueCount - b.uniqueCount ||
+          b.coverage - a.coverage,
+      )[0] ??
+    labelStats
+      .filter((stat) => stat.uniqueCount >= MIN_PIE_LABELS)
+      .sort(
+        (a, b) =>
+          b.score - a.score ||
+          a.uniqueCount - b.uniqueCount ||
+          b.coverage - a.coverage,
+      )[0];
+
+  if (!normalizedColumns.length) {
+    return {
+      payload: null,
+      reason: "未检测到可用的分类列，无法自动生成饼图",
+    };
+  }
+
+  const candidateLabelColumns = normalizedColumns;
+  const fallbackLabelColumn =
+    labelCandidate?.column ?? candidateLabelColumns[0];
+
+  if (!fallbackLabelColumn) {
+    return {
+      payload: null,
+      reason: "未检测到可用的分类列，无法自动生成饼图",
+    };
+  }
+
+  let labelColumn: string = fallbackLabelColumn;
 
   for (const column of candidateLabelColumns) {
+    if (labelCandidate) break;
     const isMostlyText = rows.some((row) => {
       const value = row[column];
       return typeof value === "string" && value.trim().length > 0;
@@ -163,33 +271,58 @@ function derivePieChartPayload(
     }
   }
 
-  let numericColumn: string | undefined;
-  for (const column of table.columns) {
-    let hasPositive = false;
-    let isNumeric = true;
+  type NumericColumnStat = {
+    column: string;
+    positiveCount: number;
+    numericCount: number;
+    sum: number;
+  };
+
+  const numericStats: NumericColumnStat[] = normalizedColumns.map((column) => {
+    let numericCount = 0;
+    let positiveCount = 0;
+    let sum = 0;
 
     for (const row of rows) {
-      const rawValue = row[column];
-      if (rawValue == null || rawValue === "") {
-        continue;
-      }
-
-      const numericValue =
-        typeof rawValue === "number" ? rawValue : Number(rawValue);
-      if (!Number.isFinite(numericValue)) {
-        isNumeric = false;
-        break;
-      }
-
+      const numericValue = toNumericValue(row[column]);
+      if (numericValue == null) continue;
+      numericCount += 1;
       if (numericValue > 0) {
-        hasPositive = true;
+        positiveCount += 1;
+        sum += numericValue;
       }
     }
 
-    if (isNumeric && hasPositive) {
-      numericColumn = column;
-      break;
-    }
+    return {
+      column,
+      numericCount,
+      positiveCount,
+      sum,
+    };
+  });
+
+  const numericCandidate = numericStats
+    .filter((stat) => stat.column !== labelColumn && stat.positiveCount > 0)
+    .sort(
+      (a, b) =>
+        b.positiveCount - a.positiveCount ||
+        b.sum - a.sum ||
+        b.numericCount - a.numericCount,
+    )[0];
+
+  let numericColumn = numericCandidate?.column;
+
+  if (!numericColumn) {
+    const fallbackNumeric = numericStats
+      .filter((stat) => stat.positiveCount > 0)
+      .sort(
+        (a, b) =>
+          b.positiveCount - a.positiveCount ||
+          b.sum - a.sum ||
+          b.numericCount - a.numericCount,
+      )[0];
+
+    numericColumn = fallbackNumeric?.column;
   }
 
   if (!numericColumn || numericColumn === labelColumn) {
@@ -199,16 +332,14 @@ function derivePieChartPayload(
     };
   }
 
+  const resolvedNumericColumn = numericColumn;
+
   const slicesMap = new Map<string, number>();
   for (const row of rows) {
     const labelValue = row[labelColumn];
-    const numericValue = row[numericColumn];
-    const value =
-      typeof numericValue === "number"
-        ? numericValue
-        : Number(numericValue);
+    const value = toNumericValue(row[resolvedNumericColumn]);
 
-    if (!Number.isFinite(value) || value <= 0) {
+    if (value == null || value <= 0) {
       continue;
     }
 
@@ -232,15 +363,16 @@ function derivePieChartPayload(
   }
 
   const breakdownTitle = table.title
-    ? `${table.title} - ${numericColumn} 分布`
+    ? `${table.title} - ${resolvedNumericColumn} 分布`
     : undefined;
 
   return {
     payload: {
       type: "pie",
+      data: slices,
       title: breakdownTitle,
-      description: `按 ${labelColumn} 分类的 ${numericColumn} 占比`,
-      totalLabel: numericColumn,
+      description: `按 ${labelColumn} 分类的 ${resolvedNumericColumn} 占比`,
+      totalLabel: resolvedNumericColumn,
       slices,
     },
   };

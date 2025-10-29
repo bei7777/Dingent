@@ -59,6 +59,68 @@ const widgetFactory = {
             rows: Array.isArray(item.rows) ? item.rows : [],
           },
         };
+      case "pie_chart": {
+        const rawSlices = Array.isArray(item.data) ? item.data : [];
+        const slices = rawSlices
+          .map((slice, index) => {
+            if (!slice || typeof slice !== "object") return null;
+            const maybeLabel =
+              typeof slice["label"] === "string"
+                ? slice["label"]
+                : typeof slice["name"] === "string"
+                  ? slice["name"]
+                  : undefined;
+            const label = maybeLabel ?? `Slice ${index + 1}`;
+            const rawValue =
+              typeof slice["value"] === "number"
+                ? slice["value"]
+                : slice["value"] ?? slice["count"] ?? slice["total"];
+            const numericValue =
+              typeof rawValue === "number" ? rawValue : Number(rawValue);
+            if (!Number.isFinite(numericValue) || numericValue <= 0) {
+              return null;
+            }
+            const color =
+              typeof slice["color"] === "string" ? slice["color"] : undefined;
+            const normalizedSlice: { label: string; value: number; color?: string } = {
+              label,
+              value: numericValue,
+            };
+            if (color) {
+              normalizedSlice.color = color;
+            }
+            return normalizedSlice;
+          })
+          .filter((slice): slice is { label: string; value: number; color?: string } =>
+            Boolean(slice),
+          );
+
+        const description =
+          typeof item.description === "string" ? item.description : undefined;
+        const totalLabel =
+          typeof item.total_label === "string"
+            ? item.total_label
+            : typeof item.totalLabel === "string"
+              ? item.totalLabel
+              : undefined;
+        const title =
+          typeof item.title === "string" && item.title.trim().length
+            ? item.title
+            : undefined;
+
+        return {
+          ...baseProps,
+          type: "pie",
+          payload: {
+            type: "pie",
+            title,
+            description,
+            totalLabel,
+            data: slices,
+            slices,
+          },
+        };
+      }
       default:
         return {
           ...baseProps,

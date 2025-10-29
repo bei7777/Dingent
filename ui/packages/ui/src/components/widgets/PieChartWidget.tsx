@@ -23,6 +23,8 @@ const FALLBACK_COLORS = [
 const LEGEND_ITEM_CLASSES =
   "flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-background/60 px-3 py-2";
 
+const CHART_SIZE = 224; // px
+
 type Segment = {
   label: string;
   value: number;
@@ -114,8 +116,11 @@ export function PieChartWidget({
   }, [segments]);
 
   const content = (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col items-center justify-center gap-4 md:flex-row">
+    <div className="flex flex-col gap-6" style={{ gap: "1.5rem" }}>
+      <div
+        className="flex flex-col items-center justify-center gap-4 md:flex-row"
+        style={{ gap: "1rem" }}
+      >
         <figure
           aria-describedby={description ? `${chartId}-description` : undefined}
           aria-labelledby={`${chartId}-title`}
@@ -123,9 +128,11 @@ export function PieChartWidget({
         >
           <svg
             viewBox="-1 -1 2 2"
-            className="size-56 md:size-64"
             role="img"
             aria-label={title ?? "Pie chart"}
+            width={CHART_SIZE}
+            height={CHART_SIZE}
+            className="h-56 w-56 md:h-64 md:w-64"
           >
             <circle
               cx={0}
@@ -172,17 +179,26 @@ export function PieChartWidget({
           <ul className="mt-4 space-y-2">
             {segments.map((segment, index) => (
               <li key={`${chartId}-legend-${index}`} className={LEGEND_ITEM_CLASSES}>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2" style={{ columnGap: 8 }}>
                   <span
-                    className="size-3 rounded-full"
-                    style={{ backgroundColor: segment.color }}
+                    className="rounded-full"
+                    style={{
+                      backgroundColor: segment.color,
+                      width: 12,
+                      height: 12,
+                      display: "inline-block",
+                      flexShrink: 0,
+                    }}
                     aria-hidden
                   />
                   <span className="text-sm font-medium text-foreground">
                     {segment.label}
                   </span>
                 </div>
-                <div className="flex items-baseline gap-2 text-sm">
+                <div
+                  className="flex items-baseline gap-2 text-sm"
+                  style={{ columnGap: 8 }}
+                >
                   <span className="font-semibold text-foreground">
                     {segment.value.toLocaleString()}
                   </span>

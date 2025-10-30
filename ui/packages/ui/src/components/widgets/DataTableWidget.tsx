@@ -835,12 +835,14 @@ export function TableWidget({
   const pieChartReason = pieChartDerivation.reason;
 
   const isLoading = !isDataValid;
-  const [showPie, setShowPie] = useState(false);
+  const [showPie, setShowPie] = useState(() => Boolean(pieChartData));
 
   React.useEffect(() => {
     if (!pieChartData) {
       setShowPie(false);
+      return;
     }
+    setShowPie(true);
   }, [pieChartData]);
 
 

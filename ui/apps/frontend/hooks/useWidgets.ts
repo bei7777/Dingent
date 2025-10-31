@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useCoAgent } from "@copilotkit/react-core";
-import { Widget } from "@repo/types";
+import { PieChartPayload, Widget } from "@repo/types";
 
 type AgentState = { artifact_ids?: string[] };
 
@@ -10,6 +10,11 @@ interface DisplayItem {
   columns?: string[];
   rows?: unknown[];
   content?: string;
+  data?: unknown[];
+  slices?: unknown[];
+  description?: string;
+  totalLabel?: string;
+  metadata?: unknown;
   [k: string]: unknown;
 }
 
@@ -59,6 +64,27 @@ const widgetFactory = {
             rows: Array.isArray(item.rows) ? item.rows : [],
           },
         };
+      case "pie_chart": {
+        const payload: PieChartPayload = {
+          type: "pie_chart",
+          title: item.title,
+          description:
+            typeof item.description === "string" ? item.description : undefined,
+          totalLabel:
+            typeof item.totalLabel === "string" ? item.totalLabel : undefined,
+          data: Array.isArray(item.data)
+            ? (item.data as PieChartPayload["data"])
+            : undefined,
+          slices: Array.isArray(item.slices)
+            ? (item.slices as PieChartPayload["slices"])
+            : undefined,
+        };
+        return {
+          ...baseProps,
+          type: "pie_chart",
+          payload,
+        };
+      }
       default:
         return {
           ...baseProps,
